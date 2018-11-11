@@ -1,5 +1,5 @@
-//extern crate  client;
-//use client;
+extern crate client;
 
 fn main(){
+    client::hello::hello_client();
 }
