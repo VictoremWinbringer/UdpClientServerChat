@@ -6,6 +6,8 @@ use azul;
 use std::sync::Mutex;
 use std::sync::Arc;
 use azul::traits::*;
+use std::thread;
+use std::time::Duration;
 
 const CUSTOM_CSS: &str = "
 .row { height: 50px; }
@@ -144,22 +146,26 @@ pub fn hello_client() {
 }
 
 fn read_from_socket_async(app_data: Arc<Mutex<ChatDataModel>>, _: Arc<()>) {
-    app_data.modify(|state| {
-        state.messages.push(read_data(&state.socket));
-    });
+    loop {
+        thread::sleep(Duration::from_millis(1000));
+        app_data.modify(|state| {
+            if let Some( message) = read_data(&state.socket)  { state.messages.push(message); }
+
+        });
+    }
 }
 
-fn read_data(socket: &Option<UdpSocket>) -> String {
+fn read_data(socket: &Option<UdpSocket>) -> Option<String> {
     let mut buf = [0u8; 4096];
     match socket {
         &Some(ref s) => {
             match s.recv(&mut buf) {
-                Ok(count) => String::from_utf8(buf[..count].into())
-                    .expect("can't parse to String"),
-                Err(e) => format!("Error {}", e),
+                Ok(count) => Some(String::from_utf8(buf[..count].into())
+                    .expect("can't parse to String")),
+                Err(e) =>{ println!("Error {}", e); None},
             }
         }
-        _ => return "Empty socket!".into(),
+        _ => None,
     }
 }
 
