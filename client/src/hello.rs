@@ -3,6 +3,9 @@
 use std::net::UdpSocket;
 
 use azul;
+use std::sync::Mutex;
+use std::sync::Arc;
+use azul::traits::*;
 
 const CUSTOM_CSS: &str = "
 .row { height: 50px; }
@@ -96,14 +99,14 @@ fn send_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, event: a
     let message = data.text_input_state.text.clone();
     data.logged_in = true;
     let s = &data.socket;
-    send_to_socket(s,message);
+    send_to_socket(s, message);
     azul::prelude::UpdateScreen::Redraw
 }
 
 fn send_to_socket(socket: &Option<UdpSocket>, message: String) {
     match socket {
         &Some(ref s) => { s.send(message.as_bytes()).expect("can't send"); }
-        _ =>return,
+        _ => return,
     }
 }
 
@@ -111,6 +114,7 @@ fn login_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, event: 
     use std::io::ErrorKind;
     use std::thread;
     use std::time::Duration;
+    app_state.add_task(read_from_socket_async, &[]);
     let mut data = app_state.data.lock().unwrap();
     let local_address = format!("127.0.0.1:{}", data.login_model.port_input.text.clone().trim());
     let socket = UdpSocket::bind(&local_address)
@@ -126,14 +130,6 @@ fn login_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, event: 
 }
 
 pub fn hello_client() {
-//    let mut buf = [0u8; 4096];
-//    loop {
-//        let message: String = read!("{}\n");
-//        socket.send(message.as_bytes())
-//            .expect("can't send");
-//        read_data(&socket, &mut buf, &remote_address);
-//    }
-
     let app = azul::prelude::App::new(ChatDataModel {
         logged_in: false,
         text_input_state: azul::widgets::text_input::TextInputState::new(""),
@@ -147,16 +143,23 @@ pub fn hello_client() {
     app.run(window).unwrap();
 }
 
-fn read_data(socket: &UdpSocket, buf: &mut [u8], remote_address: &String) {
-    match socket.recv(buf) {
-        Ok(count) => {
-            let result = String::from_utf8(buf[..count].into())
-                .expect("can't parse to String");
-            println!("{}", result)
+fn read_from_socket_async(app_data: Arc<Mutex<ChatDataModel>>, _: Arc<()>) {
+    app_data.modify(|state| {
+        state.messages.push(read_data(&state.socket));
+    });
+}
+
+fn read_data(socket: &Option<UdpSocket>) -> String {
+    let mut buf = [0u8; 4096];
+    match socket {
+        &Some(ref s) => {
+            match s.recv(&mut buf) {
+                Ok(count) => String::from_utf8(buf[..count].into())
+                    .expect("can't parse to String"),
+                Err(e) => format!("Error {}", e),
+            }
         }
-        Err(e) => {
-            println!("Error {}", e)
-        }
+        _ => return "Empty socket!".into(),
     }
 }
 
