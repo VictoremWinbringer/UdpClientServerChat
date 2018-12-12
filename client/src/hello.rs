@@ -94,9 +94,17 @@ impl azul::prelude::Layout for ChatDataModel {
 fn send_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, event: azul::prelude::WindowEvent<ChatDataModel>) -> azul::prelude::UpdateScreen {
     let mut data = app_state.data.lock().unwrap();
     let message = data.text_input_state.text.clone();
-    data.messages.push(message);
-    data.text_input_state.text = "".into();
+    data.logged_in = true;
+    let s = &data.socket;
+    send_to_socket(s,message);
     azul::prelude::UpdateScreen::Redraw
+}
+
+fn send_to_socket(socket: &Option<UdpSocket>, message: String) {
+    match socket {
+        &Some(ref s) => { s.send(message.as_bytes()).expect("can't send"); }
+        _ =>return,
+    }
 }
 
 fn login_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, event: azul::prelude::WindowEvent<ChatDataModel>) -> azul::prelude::UpdateScreen {
@@ -104,11 +112,11 @@ fn login_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, event: 
     use std::thread;
     use std::time::Duration;
     let mut data = app_state.data.lock().unwrap();
-    let local_address = format!("127.0.0.1:{}", data.login_model.port_input.text.clole().trim());
+    let local_address = format!("127.0.0.1:{}", data.login_model.port_input.text.clone().trim());
     let socket = UdpSocket::bind(&local_address)
         .expect(format!("can't bind socket to {}", local_address).as_str());
-    let remote_address = data.login_model.address_input.text.clone().trim();
-    socket.connect(remote_address)
+    let remote_address = data.login_model.address_input.text.clone().trim().to_string();
+    socket.connect(&remote_address)
         .expect(format!("can't connect to {}", &remote_address).as_str());
     socket.set_read_timeout(Some(Duration::from_millis(100)))
         .expect("can't set time out to read");
@@ -118,21 +126,6 @@ fn login_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, event: 
 }
 
 pub fn hello_client() {
-//    use std::io::ErrorKind;
-//    use std::thread;
-//    use std::time::Duration;
-//    println!("Enter port to listen");
-//    let local_port: String = read!("{}\n");
-//    let local_address = format!("127.0.0.1:{}", local_port.trim());
-//    let socket = UdpSocket::bind(&local_address)
-//        .expect(format!("can't bind socket to {}", local_address).as_str());
-//    println!("Enter server address");
-//    let remote_address: String = read!("{}\n");
-//    println!("server: {}", &remote_address);
-//    socket.connect(remote_address.clone().trim())
-//        .expect(format!("can't connect to {}", &remote_address).as_str());
-//    socket.set_read_timeout(Some(Duration::from_millis(100)))
-//        .expect("can't set time out to read");
 //    let mut buf = [0u8; 4096];
 //    loop {
 //        let message: String = read!("{}\n");
@@ -146,7 +139,7 @@ pub fn hello_client() {
         text_input_state: azul::widgets::text_input::TextInputState::new(""),
         messages: Vec::new(),
         login_model: LoginDataModel::default(),
-        socket: Option::None
+        socket: Option::None,
     }, azul::prelude::AppConfig::default());
     let mut style = azul::prelude::css::native();
     style.merge(azul::prelude::css::from_str(CUSTOM_CSS).unwrap());
