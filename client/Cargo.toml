@@ -5,3 +5,4 @@ authors = ["VictoremWinbringer <victor@mail.ru>"]
 
 [dependencies]
 text_io = "*"
+azul = { git = "https://github.com/maps4print/azul" }

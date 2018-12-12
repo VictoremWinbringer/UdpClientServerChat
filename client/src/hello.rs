@@ -18,7 +18,8 @@ pub fn hello_client() {
         .expect("can't set time out to read");
     let mut buf = [0u8; 4096];
     loop {
-        socket.send("Hello from client!".as_bytes())
+        let message: String = read!("{}\n");
+        socket.send(message.as_bytes())
             .expect("can't send");
         read_data(&socket, &mut buf, &remote_address);
     }
@@ -29,7 +30,7 @@ fn read_data(socket: &UdpSocket, buf: &mut [u8], remote_address: &String) {
         Ok(count) => {
             let result = String::from_utf8(buf[..count].into())
                 .expect("can't parse to String");
-            println!("received {} from  {}", result, remote_address)
+            println!("{}", result)
         }
         Err(e) => {
             println!("Error {}", e)

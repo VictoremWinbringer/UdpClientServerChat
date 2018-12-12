@@ -19,7 +19,7 @@ pub fn hello_server() {
         let result = String::from_utf8(buf[..count].into())
             .expect("can't parse to String");
         println!("received {} from {}", result, source);
-        socket.send_to("Hello from server".as_bytes(), source)
+        socket.send_to(format!("{} : {}",source,result).as_bytes(), source)
             .expect(format!("can't send to {}", source).as_str());
     }
 }
