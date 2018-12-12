@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 text_io = "*"
 azul = { git = "https://github.com/maps4print/azul" }
+backtrace = "*"

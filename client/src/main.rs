@@ -8,7 +8,13 @@
 
 use azul;
 
-const CUSTOM_CSS: &str = ".row { height: 50px; }";
+const CUSTOM_CSS: &str = "
+.row { height: 50px; }
+.orange {
+    background: linear-gradient(to bottom, #f69135, #f37335);
+    font-color: white;
+    border-bottom: 1px solid #8d8d8d;
+}";
 
 #[derive(Debug)]
 struct MyDataModel {
@@ -20,6 +26,7 @@ impl azul::prelude::Layout for MyDataModel {
         let button = azul::widgets::button::Button::with_label("Send")
             .dom()
             .with_class("row")
+            .with_class("orange")
             .with_callback(azul::prelude::On::MouseUp,azul::prelude::Callback(send_pressed));
         let text = azul::widgets::text_input::TextInput::new()
             .bind(info.window,&self.text_input_state,&self)
@@ -42,7 +49,7 @@ fn send_pressed(app_state: &mut azul::prelude::AppState<MyDataModel>, event: azu
 }
 
 fn main() {
-    let app = azul::prelude::App::new(MyDataModel { text_input_state: azul::widgets::text_input::TextInputState::new("Inter you text") }, azul::prelude::AppConfig::default());
+    let app = azul::prelude::App::new(MyDataModel { text_input_state: azul::widgets::text_input::TextInputState::new("") }, azul::prelude::AppConfig::default());
     let mut style = azul::prelude::css::native();
     style.merge(azul::prelude::css::from_str(CUSTOM_CSS).unwrap());
     let window = azul::prelude::Window::new(azul::prelude::WindowCreateOptions::default(), style).unwrap();
