@@ -6,8 +6,6 @@
 
 #![windows_subsystem = "windows"]
 
-//extern crate azul;
-
 use azul;
 
 const CUSTOM_CSS: &str = ".row { height: 50px; }";
