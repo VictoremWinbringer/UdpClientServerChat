@@ -18,6 +18,7 @@ struct ChatDataModel {
     text_input_state: azul::widgets::text_input::TextInputState,
     messages: Vec<String>,
     login_model: LoginDataModel,
+    socket: Option<UdpSocket>,
 }
 
 #[derive(Debug, Default)]
@@ -99,10 +100,20 @@ fn send_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, event: a
 }
 
 fn login_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, event: azul::prelude::WindowEvent<ChatDataModel>) -> azul::prelude::UpdateScreen {
+    use std::io::ErrorKind;
+    use std::thread;
+    use std::time::Duration;
     let mut data = app_state.data.lock().unwrap();
-    let message = data.text_input_state.text.clone();
-    data.messages.push(message);
-    data.text_input_state.text = "".into();
+    let local_address = format!("127.0.0.1:{}", data.login_model.port_input.text.clole().trim());
+    let socket = UdpSocket::bind(&local_address)
+        .expect(format!("can't bind socket to {}", local_address).as_str());
+    let remote_address = data.login_model.address_input.text.clone().trim();
+    socket.connect(remote_address)
+        .expect(format!("can't connect to {}", &remote_address).as_str());
+    socket.set_read_timeout(Some(Duration::from_millis(100)))
+        .expect("can't set time out to read");
+    data.logged_in = true;
+    data.socket = Option::Some(socket);
     azul::prelude::UpdateScreen::Redraw
 }
 
@@ -135,6 +146,7 @@ pub fn hello_client() {
         text_input_state: azul::widgets::text_input::TextInputState::new(""),
         messages: Vec::new(),
         login_model: LoginDataModel::default(),
+        socket: Option::None
     }, azul::prelude::AppConfig::default());
     let mut style = azul::prelude::css::native();
     style.merge(azul::prelude::css::from_str(CUSTOM_CSS).unwrap());
