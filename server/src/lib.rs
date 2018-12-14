@@ -4,17 +4,22 @@ extern crate text_io;
 use std::net::{UdpSocket, SocketAddr};
 use std::time::Duration;
 use std::sync::mpsc;
-//  use std::io::ErrorKind;
-  use std::thread;
+use std::thread;
 
 const TIMEOUT_IN_MILLIS: u64 = 2000;
 
 pub fn run() {
     let socket = create_socket();
     let (sx, rx) = mpsc::channel();
-    let socket_ref = socket.try_clone().unwrap();
-   thread::spawn( move ||{
-       let mut addresses = Vec::<SocketAddr>::new();
+    start_sender_thread(rx, socket.try_clone().unwrap());
+    loop {
+        sx.send(read_data(&socket)).unwrap();
+    }
+}
+
+fn start_sender_thread(rx: mpsc::Receiver<(Vec<u8>, SocketAddr)>, socket: UdpSocket) {
+    thread::spawn(move || {
+        let mut addresses = Vec::<SocketAddr>::new();
         loop {
             let (bytes, source) = rx.recv().unwrap();
             if !addresses.contains(&source) {
@@ -29,16 +34,12 @@ pub fn run() {
             addresses
                 .iter()
                 .for_each(|s| {
-                    socket_ref
-                        .send_to(format!("{} : {}", source, result).as_bytes(), s)
+                    socket
+                        .send_to(format!("FROM: {} MESSAGE: {}", source, result).as_bytes(), s)
                         .expect(format!("can't send to {}", source).as_str());
                 });
         }
     });
-
-    loop {
-       sx.send(read_data(&socket)).unwrap();
-    }
 }
 
 fn create_socket() -> UdpSocket {

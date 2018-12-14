@@ -25,6 +25,7 @@ struct MessagingDataModel {
     text_input_state: azul::widgets::text_input::TextInputState,
     messages: Vec<String>,
     socket: Option<UdpSocket>,
+    has_new_message: bool,
 }
 
 //VIEW -------------------------------------------------------------------------------------------------------------------------------
@@ -109,6 +110,7 @@ pub fn run() {
             text_input_state: azul::widgets::text_input::TextInputState::new(""),
             messages: Vec::new(),
             socket: None,
+            has_new_message: false,
         },
         login_model: LoginDataModel::default(),
     }, azul::prelude::AppConfig::default());
@@ -123,6 +125,8 @@ struct Controller {}
 
 const TIMEOUT_IN_MILLIS: u64 = 2000;
 
+//Надо бы авто обновление интерфейса сделать при получении нового месседжа с сервера
+//Думаю сделать это через демон который будет при добавлении нового сообдения отправлять комманду на перерисовку.
 impl Controller {
     fn send_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, _event: azul::prelude::WindowEvent<ChatDataModel>) -> azul::prelude::UpdateScreen {
         let mut data = app_state.data.lock().unwrap();
@@ -137,10 +141,9 @@ impl Controller {
         if let Some(ref _s) = app_state.data.clone().lock().unwrap().messaging_model.socket {
             return azul::prelude::UpdateScreen::DontRedraw;
         }
-        app_state
-            .add_task(|a, b| {
-                Controller::read_from_socket_async(a, b)
-            }, &[]);
+
+        app_state.add_task(Controller::read_from_socket_async, &[]);
+        app_state.add_daemon(azul::prelude::Daemon::unique(azul::prelude::DaemonCallback(Controller::redraw_daemon)));
         let mut data = app_state.data.lock().unwrap();
         let local_address = format!("127.0.0.1:{}", data.login_model.port_input.text.clone().trim());
         let socket = UdpSocket::bind(&local_address)
@@ -160,11 +163,22 @@ impl Controller {
         loop {
             if let Some(message) = ChatService::read_data(&socket) {
                 app_data.modify(|state| {
+                    state.messaging_model.has_new_message = true;
                     state.messaging_model.messages.push(message);
                 });
             }
         }
     }
+
+    fn redraw_daemon(state: &mut ChatDataModel, _resources: &mut azul::prelude::AppResources) -> (azul::prelude::UpdateScreen, azul::prelude::TerminateDaemon) {
+        if state.messaging_model.has_new_message {
+            state.messaging_model.has_new_message = true;
+            (azul::prelude::UpdateScreen::Redraw, azul::prelude::TerminateDaemon::Continue)
+        } else {
+            (azul::prelude::UpdateScreen::DontRedraw, azul::prelude::TerminateDaemon::Continue)
+        }
+    }
+
 
     fn get_socket(app_data: Arc<Mutex<ChatDataModel>>) -> Option<UdpSocket> {
         let model = app_data.clone();
