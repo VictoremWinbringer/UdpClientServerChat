@@ -121,7 +121,7 @@ pub fn run() {
 //CONTROLLER -------------------------------------------------------------------------------------------------------------------------------------------------
 struct Controller {}
 
-const TIMEOUT_IN_MILLIS:u64 = 2000;
+const TIMEOUT_IN_MILLIS: u64 = 2000;
 
 impl Controller {
     fn send_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, _event: azul::prelude::WindowEvent<ChatDataModel>) -> azul::prelude::UpdateScreen {
@@ -135,10 +135,10 @@ impl Controller {
     fn login_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, _event: azul::prelude::WindowEvent<ChatDataModel>) -> azul::prelude::UpdateScreen {
         use std::time::Duration;
         if let Some(ref _s) = app_state.data.clone().lock().unwrap().messaging_model.socket {
-          return azul::prelude::UpdateScreen::DontRedraw
+            return azul::prelude::UpdateScreen::DontRedraw;
         }
         app_state
-            .add_task(|a,b| {
+            .add_task(|a, b| {
                 Controller::read_from_socket_async(a, b)
             }, &[]);
         let mut data = app_state.data.lock().unwrap();
@@ -167,13 +167,13 @@ impl Controller {
     }
 
     fn get_socket(app_data: Arc<Mutex<ChatDataModel>>) -> Option<UdpSocket> {
-         let model = app_data.clone();
+        let model = app_data.clone();
         let ref_model = &(model.lock().unwrap().messaging_model.socket);
-       let socket = match ref_model {
-           Some(s) => Some(s.try_clone().unwrap()),
-           _ => None
-       };
-       std::mem::drop(app_data);
+        let socket = match ref_model {
+            Some(s) => Some(s.try_clone().unwrap()),
+            _ => None
+        };
+        std::mem::drop(app_data);
         socket
     }
 }
