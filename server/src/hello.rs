@@ -1,8 +1,10 @@
 use std::net::{UdpSocket, SocketAddr};
 
+const TIMEOUT_IN_MILLIS:u64 = 2000;
+
 pub fn hello_server() {
-    use std::io::ErrorKind;
-    use std::thread;
+  //  use std::io::ErrorKind;
+  //  use std::thread;
     use std::time::Duration;
 
     println!("Enter port to listen");
@@ -11,7 +13,7 @@ pub fn hello_server() {
     println!("server addres {}", &local_address);
     let socket = UdpSocket::bind(&local_address.trim())
         .expect(format!("can't bind socket to {}", &local_address).as_str());
-    socket.set_read_timeout(Some(Duration::from_millis(100)))
+    socket.set_read_timeout(Some(Duration::from_millis(TIMEOUT_IN_MILLIS)))
         .expect("can't set time out to read");
     let mut buf = [0u8; 4096];
     loop {

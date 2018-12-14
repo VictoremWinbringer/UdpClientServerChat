@@ -21,10 +21,10 @@ struct LoginDataModel {
 }
 
 #[derive(Debug)]
-struct MessagingDataModel{
+struct MessagingDataModel {
     text_input_state: azul::widgets::text_input::TextInputState,
     messages: Vec<String>,
-    socket: Option<UdpSocket>
+    socket: Option<UdpSocket>,
 }
 
 //VIEW -------------------------------------------------------------------------------------------------------------------------------
@@ -61,7 +61,9 @@ impl ChatDataModel {
             .dom()
             .with_class("row")
             .with_class("orange")
-            .with_callback(azul::prelude::On::MouseUp, azul::prelude::Callback(Controller::login_pressed));
+            .with_callback(
+                azul::prelude::On::MouseUp,
+                azul::prelude::Callback(Controller::login_pressed));
 
         let port_label = azul::widgets::label::Label::new("Enter port to listen:")
             .dom()
@@ -103,10 +105,10 @@ impl azul::prelude::Layout for ChatDataModel {
 pub fn run() {
     let app = azul::prelude::App::new(ChatDataModel {
         logged_in: false,
-        messaging_model: MessagingDataModel{
+        messaging_model: MessagingDataModel {
             text_input_state: azul::widgets::text_input::TextInputState::new(""),
             messages: Vec::new(),
-            socket:None,
+            socket: None,
         },
         login_model: LoginDataModel::default(),
     }, azul::prelude::AppConfig::default());
@@ -117,21 +119,28 @@ pub fn run() {
 }
 
 //CONTROLLER -------------------------------------------------------------------------------------------------------------------------------------------------
-struct Controller {
-}
+struct Controller {}
+
+const TIMEOUT_IN_MILLIS:u64 = 2000;
 
 impl Controller {
     fn send_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, _event: azul::prelude::WindowEvent<ChatDataModel>) -> azul::prelude::UpdateScreen {
         let mut data = app_state.data.lock().unwrap();
         let message = data.messaging_model.text_input_state.text.clone();
         data.logged_in = true;
-      ChatService::send_to_socket( message);
+        ChatService::send_to_socket(message, &data.messaging_model.socket);
         azul::prelude::UpdateScreen::Redraw
     }
 
     fn login_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, _event: azul::prelude::WindowEvent<ChatDataModel>) -> azul::prelude::UpdateScreen {
         use std::time::Duration;
-        app_state.add_task(Controller::read_from_socket_async, &[]);
+        if let Some(ref _s) = app_state.data.clone().lock().unwrap().messaging_model.socket {
+          return azul::prelude::UpdateScreen::DontRedraw
+        }
+        app_state
+            .add_task(|a,b| {
+                Controller::read_from_socket_async(a, b)
+            }, &[]);
         let mut data = app_state.data.lock().unwrap();
         let local_address = format!("127.0.0.1:{}", data.login_model.port_input.text.clone().trim());
         let socket = UdpSocket::bind(&local_address)
@@ -139,59 +148,61 @@ impl Controller {
         let remote_address = data.login_model.address_input.text.clone().trim().to_string();
         socket.connect(&remote_address)
             .expect(format!("can't connect to {}", &remote_address).as_str());
-        socket.set_read_timeout(Some(Duration::from_millis(5000)))
+        socket.set_read_timeout(Some(Duration::from_millis(TIMEOUT_IN_MILLIS)))
             .expect("can't set time out to read");
         data.logged_in = true;
-        unsafe {
-            SOCKET = Option::Some(socket);
-        }
+        data.messaging_model.socket = Option::Some(socket);
         azul::prelude::UpdateScreen::Redraw
     }
 
     fn read_from_socket_async(app_data: Arc<Mutex<ChatDataModel>>, _: Arc<()>) {
+        let socket = Controller::get_socket(app_data.clone());
         loop {
-            if let Some(message) = ChatService::read_data() {
-
+            if let Some(message) = ChatService::read_data(&socket) {
                 app_data.modify(|state| {
                     state.messaging_model.messages.push(message);
                 });
             }
         }
     }
+
+    fn get_socket(app_data: Arc<Mutex<ChatDataModel>>) -> Option<UdpSocket> {
+         let model = app_data.clone();
+        let ref_model = &(model.lock().unwrap().messaging_model.socket);
+       let socket = match ref_model {
+           Some(s) => Some(s.try_clone().unwrap()),
+           _ => None
+       };
+       std::mem::drop(app_data);
+        socket
+    }
 }
 
 //Services -------------------------------------------------------------------------------------------------
-struct ChatService {
-}
-
-static mut SOCKET: Option<UdpSocket> = None;
+struct ChatService {}
 
 impl ChatService {
-     fn read_data() -> Option<String> {
+    fn read_data(socket: &Option<UdpSocket>) -> Option<String> {
         let mut buf = [0u8; 4096];
-         unsafe {
-             match &SOCKET {
-                 Some(s) => {
-                     match s.recv(&mut buf) {
-                         Ok(count) => Some(String::from_utf8(buf[..count].into())
-                             .expect("can't parse to String")),
-                         Err(e) => {
-                             println!("Error {}", e);
-                             None
-                         },
-                     }
-                 }
-                 _ => None,
-             }
-         }
+        match socket {
+            Some(s) => {
+                match s.recv(&mut buf) {
+                    Ok(count) => Some(String::from_utf8(buf[..count].into())
+                        .expect("can't parse to String")),
+                    Err(e) => {
+                        println!("Error {}", e);
+                        None
+                    }
+                }
+            }
+            _ => None,
+        }
     }
 
-    fn send_to_socket(message: String) {
-        unsafe {
-            match &SOCKET {
-                Some(s) => { s.send(message.as_bytes()).expect("can't send"); }
-                _ => return,
-            }
+    fn send_to_socket(message: String, socket: &Option<UdpSocket>) {
+        match socket {
+            Some(s) => { s.send(message.as_bytes()).expect("can't send"); }
+            _ => return,
         }
     }
 }
