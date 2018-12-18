@@ -139,7 +139,9 @@ impl ChatDataModel {
     }
 }
 
+//Запускает цикл отрисовки GUI и обработки ввода пользователя
 pub fn run() {
+    //Создаем приложение со стартовыми данными
     let app = azul::prelude::App::new(ChatDataModel {
         logged_in: false,
         messaging_model: MessagingDataModel {
@@ -150,9 +152,13 @@ pub fn run() {
         },
         login_model: LoginDataModel::default(),
     }, azul::prelude::AppConfig::default());
+    //Стили используемые приложением по умолчанию
     let mut style = azul::prelude::css::native();
+    //Добавляем к ним наши собственные стили
     style.merge(azul::prelude::css::from_str(CUSTOM_CSS).unwrap());
+    //Создаем окно в котором будет отображать наше приложение
     let window = azul::prelude::Window::new(azul::prelude::WindowCreateOptions::default(), style).unwrap();
+    //Запускаем приложение в этом окне
     app.run(window).unwrap();
 }
 
