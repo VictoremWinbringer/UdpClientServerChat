@@ -174,9 +174,11 @@ impl Controller {
     fn send_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, _event: azul::prelude::WindowEvent<ChatDataModel>) -> azul::prelude::UpdateScreen {
         //Получаем во владение мутекс с нашей моделью данных.
         // Это блокирует поток отрисовки интерфейса до тех пор пока мютекс не будет освобожден.
-        let data = app_state.data.lock().unwrap();
+        let mut data = app_state.data.lock().unwrap();
         //Делаем копию введенного пользователем текста
         let message = data.messaging_model.text_input_state.text.clone();
+        //Очищаем поле ввода.
+        data.messaging_model.text_input_state.text = "".into();
         //Шана функция для отправки сообщения в сокет
         ChatService::send_to_socket(message, &data.messaging_model.socket);
         //Сообщаем фреймворку что после обработки этого события нужно перерисовать интерфейс.
