@@ -7,7 +7,7 @@ use std::sync::Arc;
 use azul::traits::*;
 
 // MODEL ---------------------------------------------------------------------------------------------------------------------------
-//Это позволит отображать нашут структуру в виде строки в шаблоне вида {:?}
+//Это позволит отображать нашут структуру в виде строки в шаблоне вида {:?} например println!("{:?}",model)
 #[derive(Debug)]
 //Наша модель данных
 //Для того чтобы ее можно было использовать в Azul она обязательно должна реальизовать трейт Layout
@@ -42,19 +42,6 @@ struct MessagingDataModel {
 
 //VIEW -------------------------------------------------------------------------------------------------------------------------------
 
-impl azul::prelude::Layout for ChatDataModel {
-    //Метод который создает конечный DOM и вызваеться каждый раз кода нужно перерисовать интерфейс
-    fn layout(&self, info: azul::prelude::WindowInfo<Self>) -> azul::prelude::Dom<Self> {
-        //Если мы уже подключены к серверу то показываем форму для отправки и чтения сообщений
-        //иначе отображаем форму для подключения к серверу
-        if self.logged_in {
-            self.chat_form(info)
-        } else {
-            self.login_form(info)
-        }
-    }
-}
-
 //css стили для нашего DOM
 const CUSTOM_CSS: &str = "
 .row { height: 50px; }
@@ -64,9 +51,16 @@ const CUSTOM_CSS: &str = "
     border-bottom: 1px solid #8d8d8d;
 }";
 
-impl ChatDataModel {
+
+//Трейт для элементов потомков корневого DataModel
+trait Layout<T> {
+    //Создает елемент DOM на основе данных потомка с типом Т родителя.
+    fn layout(&self, info: azul::prelude::WindowInfo<T>, root: &T) -> azul::prelude::Dom<T> where T: Sized + azul::prelude::Layout;
+}
+
+impl Layout<ChatDataModel> for LoginDataModel {
     //Создает форму для ввода данных необходимых для подключения к серверу.
-    fn login_form(&self, info: azul::prelude::WindowInfo<Self>) -> azul::prelude::Dom<Self> {
+    fn layout(&self, info: azul::prelude::WindowInfo<ChatDataModel>, root: &ChatDataModel) -> azul::prelude::Dom<ChatDataModel> {
         //Создаем кнопку с текстовой надписью Login
         let button = azul::widgets::button::Button::with_label("Login")
             //Преобразуем ее в обьект DOM
@@ -78,7 +72,7 @@ impl ChatDataModel {
             //Добавляем обработчик события для нажатия на кнопку
             .with_callback(
                 azul::prelude::On::MouseUp,
-                azul::prelude::Callback(Controller::login_pressed));
+                azul::prelude::Callback(LoginController::login_pressed));
 
         //Создаем текстовую метку с тектом Enter port to listen и css классом row
         let port_label = azul::widgets::label::Label::new("Enter port to listen:")
@@ -89,8 +83,8 @@ impl ChatDataModel {
             //Привязываем текстовое поле к свойству нашей DataModel
             // Это двухсторонняя привязка. Теперь редактирование TextInput автоматически изменяет
             // текст в свойстве нашей модели и обратное тоже верно. Если мы изменим текст в нашей модели то измениться текст в TextInput
-            .bind(info.window, &self.login_model.port_input, &self)
-            .dom(&self.login_model.port_input)
+            .bind(info.window, &self.port_input, root)
+            .dom(&self.port_input)
             .with_class("row");
 
         // Тоже что и для port_label
@@ -100,8 +94,8 @@ impl ChatDataModel {
 
         //то же что и для port. Двухсторонняя привязка
         let address = azul::widgets::text_input::TextInput::new()
-            .bind(info.window, &self.login_model.address_input, &self)
-            .dom(&self.login_model.address_input)
+            .bind(info.window, &self.address_input, root)
+            .dom(&self.address_input)
             .with_class("row");
 
         //Создаем корневой DOM элемент в который помещяем наши UI элементы
@@ -112,30 +106,45 @@ impl ChatDataModel {
             .with_child(address)
             .with_child(button)
     }
+}
 
+impl Layout<ChatDataModel> for MessagingDataModel {
     //Создает форму для отправки и чтения сообдений
-    fn chat_form(&self, info: azul::prelude::WindowInfo<Self>) -> azul::prelude::Dom<Self> {
+    fn layout(&self, info: azul::prelude::WindowInfo<ChatDataModel>, root: &ChatDataModel) -> azul::prelude::Dom<ChatDataModel> {
         //Создаем кнопку с тектом Send css классами row, orange и обработчиком события при ее нажатии
         let button = azul::widgets::button::Button::with_label("Send")
             .dom()
             .with_class("row")
             .with_class("orange")
-            .with_callback(azul::prelude::On::MouseUp, azul::prelude::Callback(Controller::send_pressed));
+            .with_callback(azul::prelude::On::MouseUp, azul::prelude::Callback(MessagingController::send_pressed));
         //Создаем поле для ввода текста с двухсторонней привязкой с свойству модели self.messaging_model.text_input_state
         // и css классом row
         let text = azul::widgets::text_input::TextInput::new()
-            .bind(info.window, &self.messaging_model.text_input_state, &self)
-            .dom(&self.messaging_model.text_input_state)
+            .bind(info.window, &self.text_input_state, root)
+            .dom(&self.text_input_state)
             .with_class("row");
         //Создаем корневой дом элемент и помещяем в него наши UI элементы
         let mut dom = azul::prelude::Dom::new(azul::prelude::NodeType::Div)
             .with_child(text)
             .with_child(button);
         //Добавляем тестовые метки которые отображают сообщения которые были написаны в чате
-        for i in &self.messaging_model.messages {
+        for i in &self.messages {
             dom.add_child(azul::widgets::label::Label::new(i.clone()).dom().with_class("row"));
         }
         dom
+    }
+}
+
+impl azul::prelude::Layout for ChatDataModel {
+    //Метод который создает конечный DOM и вызваеться каждый раз кода нужно перерисовать интерфейс
+    fn layout(&self, info: azul::prelude::WindowInfo<Self>) -> azul::prelude::Dom<Self> {
+        //Если мы уже подключены к серверу то показываем форму для отправки и чтения сообщений
+        //иначе отображаем форму для подключения к серверу
+        if self.logged_in {
+            self.messaging_model.layout(info, self)
+        } else {
+            self.login_model.layout(info, self)
+        }
     }
 }
 
@@ -163,12 +172,14 @@ pub fn run() {
 }
 
 //CONTROLLER -------------------------------------------------------------------------------------------------------------------------------------------------
-struct Controller {}
+struct MessagingController {}
+
+struct LoginController {}
 
 //Таймату в милисекундах после которого будет прервана блокирующая операция чтения из сокета
 const TIMEOUT_IN_MILLIS: u64 = 2000;
 
-impl Controller {
+impl MessagingController {
     //Метод отрабатывает когда пользователь
     // хочет оправить новое сообщение на сервер.
     fn send_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, _event: azul::prelude::WindowEvent<ChatDataModel>) -> azul::prelude::UpdateScreen {
@@ -180,63 +191,57 @@ impl Controller {
         //Очищаем поле ввода.
         data.messaging_model.text_input_state.text = "".into();
         //Шана функция для отправки сообщения в сокет
-        ChatService::send_to_socket(message, &data.messaging_model.socket);
+        SocketService::send_to_socket(message, &data.messaging_model.socket);
         //Сообщаем фреймворку что после обработки этого события нужно перерисовать интерфейс.
         azul::prelude::UpdateScreen::Redraw
     }
+}
 
+impl LoginController {
     //Метод отрабатывает когда пользователь хочет подключиться к серверу
     fn login_pressed(app_state: &mut azul::prelude::AppState<ChatDataModel>, _event: azul::prelude::WindowEvent<ChatDataModel>) -> azul::prelude::UpdateScreen {
-        // Подключаем структуру для представления отрезка времени из стандартной библиотеки
-        use std::time::Duration;
         //Если мы уже подключены к серверу то прерываем выполнение метода сообщаем фреймворку
         // что нет необходимости перерисовывать интерфейс.
         if let Some(ref _s) = app_state.data.clone().lock().unwrap().messaging_model.socket {
             return azul::prelude::UpdateScreen::DontRedraw;
         }
+        let temp = app_state.data.clone();
+        //Получаем во владение мьютекс
+        let mut data = temp.lock().unwrap();
+        //Создаем сокет
+        let socket = SocketService::create_socket(data.login_model.port_input.text.as_str(), data.login_model.address_input.text.as_str());
+// Утанавливаем флаг на то что пользователь уже подключился к серверу
+        data.logged_in = true;
+// Передаем в модель данных созданный сокет
+        data.messaging_model.socket = Option::Some(socket);
         //Добавляем задачу которая будет выполняться асинхронно в потоке из пула потоков фреймворка Azul
         //Обращение к мютексу с моделью данных блокриуте обновление UI до тех пор пока мюьютекс не освободиться
-        app_state.add_task(Controller::read_from_socket_async, &[]);
+        app_state.add_task(TasksService::read_from_socket_async, &[]);
         //Добавляем повторяющуюся задачу которая выполеться в основном потоке.
         // Любые длительные вычисления в этом демоне блокирует обновление интерфейса
-        app_state.add_daemon(azul::prelude::Daemon::unique(azul::prelude::DaemonCallback(Controller::redraw_daemon)));
-        //Получаем во владение мьютекс
-        let mut data = app_state.data.lock().unwrap();
-        //Считываем введенный пользователем порт и создаем на основе него локальный адресс
-        // будем прослушивать
-        let local_address = format!("127.0.0.1:{}", data.login_model.port_input.text.clone().trim());
-        //Создаем UDP сокет который считывает пакеты приходящие на локальный адресс.
-        let socket = UdpSocket::bind(&local_address)
-            .expect(format!("can't bind socket to {}", local_address).as_str());
-        //Считываем введенный пользователем адрес сервера
-        let remote_address = data.login_model.address_input.text.clone().trim().to_string();
-        //Говорим нашему UDP сокету читать пакеты только от этого сервера
-        socket.connect(&remote_address)
-            .expect(format!("can't connect to {}", &remote_address).as_str());
-        //Устанавливаем таймаут для операции чтения из сокета.
-        //Запись в сокет происходит без ожидания т. е. мы просто пишем данные и не ждем ничего
-        // а операция чтения из сокета блокирует поток и ждет пока не прийдут данные которые можно считать.
-        // Если не установить таймаут то операция чтения из сокета будет ждать бесконечно.
-        socket.set_read_timeout(Some(Duration::from_millis(TIMEOUT_IN_MILLIS)))
-            .expect("can't set time out to read");
-        // Утанавливаем флаг на то что пользователь уже подключился к серверу
-        data.logged_in = true;
-        // Передаем в модель данных созданный сокет
-        data.messaging_model.socket = Option::Some(socket);
+        app_state.add_daemon(azul::prelude::Daemon::unique(azul::prelude::DaemonCallback(DaemonService::redraw_daemon)));
         //Сообщаем фреймворку что после обработки этого события нужно перерисовать интерфейс
         azul::prelude::UpdateScreen::Redraw
     }
+}
 
+//Services -------------------------------------------------------------------------------------------------
+struct TasksService {}
+
+impl TasksService {
     //Асинхронная операция выполняющаяся в пуле потоков фреймворка azul
     fn read_from_socket_async(app_data: Arc<Mutex<ChatDataModel>>, _: Arc<()>) {
+        let temp = app_data.clone();
+        //Лочим мьютекс и получаем ссылку на сокет
         //Получаем копию сокета из нашей модели данных
-        let socket = Controller::get_socket(app_data.clone());
+        let socket = SocketService::clone_socket( &(temp.lock().unwrap().messaging_model.socket));
+        drop(temp);
         loop {
             //Пытаемся прочитать данные из сокета.
             //Если не сделать копию сокета и напрямую ждать тут пока прийдет сообщение из сокета
             // который в мьютексе в нашей модели денных
             // то весь интерфейс переснанет обновляться до тех пор пока мы не освободим мьютекс
-            if let Some(message) = ChatService::read_data(&socket) {
+            if let Some(message) = SocketService::read_data(&socket) {
                 //Если нам прило какоте то сообшение то изменяем нашу модель данных
                 // modify делает то же что и .lock().unwrap() с передачей результата в лямбду
                 // и освобождением мьютекса после того как закончиться код лямбды
@@ -249,7 +254,11 @@ impl Controller {
             }
         }
     }
+}
 
+struct DaemonService {}
+
+impl DaemonService {
     //Повторяющаяся синхронная операция выполняющая в основном потоке
     fn redraw_daemon(state: &mut ChatDataModel, _resources: &mut azul::prelude::AppResources) -> (azul::prelude::UpdateScreen, azul::prelude::TerminateDaemon) {
         //Если у нас есть новое сообщение то сообщаем фреймворку что нужно перерисовать
@@ -262,25 +271,11 @@ impl Controller {
             (azul::prelude::UpdateScreen::DontRedraw, azul::prelude::TerminateDaemon::Continue)
         }
     }
-
-
-    //Создает копию нашего сокета для того чтобы не держать заблокированным
-    //Мьютекс с нашей моделью данных
-    fn get_socket(app_data: Arc<Mutex<ChatDataModel>>) -> Option<UdpSocket> {
-        //Лочим мьютекс и получаем ссылку на сокет
-        let ref_model = &(app_data.lock().unwrap().messaging_model.socket);
-        //Создаем копию сокета. Мьютекс освободиться автоматически при выходе из метода.
-        match ref_model {
-            Some(s) => Some(s.try_clone().unwrap()),
-            _ => None
-        }
-    }
 }
 
-//Services -------------------------------------------------------------------------------------------------
-struct ChatService {}
+struct SocketService {}
 
-impl ChatService {
+impl SocketService {
     //Читаем денные из сокета
     fn read_data(socket: &Option<UdpSocket>) -> Option<String> {
         //Буффер для данных которые будем считывать из сокета.
@@ -313,6 +308,39 @@ impl ChatService {
             // Если отправить данные не удалось то прерываем работу программы с сообщением "can't send"
             Some(s) => { s.send(message.as_bytes()).expect("can't send"); }
             _ => return,
+        }
+    }
+
+    fn create_socket(port: &str, server_address: &str) -> UdpSocket {
+        // Подключаем структуру для представления отрезка времени из стандартной библиотеки
+        use std::time::Duration;
+        //Считываем введенный пользователем порт и создаем на основе него локальный адресс
+// будем прослушивать
+        let local_address = format!("127.0.0.1:{}", port.trim());
+//Создаем UDP сокет который считывает пакеты приходящие на локальный адресс.
+        let socket = UdpSocket::bind(&local_address)
+            .expect(format!("can't bind socket to {}", local_address).as_str());
+//Считываем введенный пользователем адрес сервера
+        let remote_address = server_address.trim();
+//Говорим нашему UDP сокету читать пакеты только от этого сервера
+        socket.connect(remote_address)
+            .expect(format!("can't connect to {}", remote_address).as_str());
+//Устанавливаем таймаут для операции чтения из сокета.
+//Запись в сокет происходит без ожидания т. е. мы просто пишем данные и не ждем ничего
+// а операция чтения из сокета блокирует поток и ждет пока не прийдут данные которые можно считать.
+// Если не установить таймаут то операция чтения из сокета будет ждать бесконечно.
+        socket.set_read_timeout(Some(Duration::from_millis(TIMEOUT_IN_MILLIS)))
+            .expect("can't set time out to read");
+        socket
+    }
+
+    //Создает копию нашего сокета для того чтобы не держать заблокированным
+    //Мьютекс с нашей моделью данных
+    fn clone_socket(socket: &Option<UdpSocket>) -> Option<UdpSocket> {
+        //Создаем копию сокета. Мьютекс освободиться автоматически при выходе из метода.
+        match socket {
+            Some(s) => Some(s.try_clone().unwrap()),
+            _ => None
         }
     }
 }
