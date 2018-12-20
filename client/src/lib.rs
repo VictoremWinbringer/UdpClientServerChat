@@ -234,24 +234,24 @@ impl TasksService {
         let temp = app_data.clone();
         //Лочим мьютекс и получаем ссылку на сокет
         //Получаем копию сокета из нашей модели данных
-        let socket = SocketService::clone_socket( &(temp.lock().unwrap().messaging_model.socket));
+        let socket = SocketService::clone_socket(&(temp.lock().unwrap().messaging_model.socket));
         drop(temp);
         loop {
             //Пытаемся прочитать данные из сокета.
             //Если не сделать копию сокета и напрямую ждать тут пока прийдет сообщение из сокета
             // который в мьютексе в нашей модели денных
             // то весь интерфейс переснанет обновляться до тех пор пока мы не освободим мьютекс
-            if let Some(message) = SocketService::read_data(&socket) {
-                //Если нам прило какоте то сообшение то изменяем нашу модель данных
-                // modify делает то же что и .lock().unwrap() с передачей результата в лямбду
-                // и освобождением мьютекса после того как закончиться код лямбды
+            //Если нам прило какоте то сообшение то изменяем нашу модель данных
+            // modify делает то же что и .lock().unwrap() с передачей результата в лямбду
+            // и освобождением мьютекса после того как закончиться код лямбды
+            SocketService::read_data(&socket).map(|message| {
                 app_data.modify(|state| {
                     //Устанавливаем флаг на то что у нас новое сообдение
                     state.messaging_model.has_new_message = true;
                     //Добавляем сообщение в массив всех сообщения чата
                     state.messaging_model.messages.push(message);
                 });
-            }
+            });
         }
     }
 }
@@ -280,35 +280,32 @@ impl SocketService {
     fn read_data(socket: &Option<UdpSocket>) -> Option<String> {
         //Буффер для данных которые будем считывать из сокета.
         let mut buf = [0u8; 4096];
-        match socket {
-            Some(s) => {
-                //Блокирующий вызов. Здесь поток выполнения останавливаеться до тех пор пока
-                // не будут считанные данные или произойдет таймаут.
-                match s.recv(&mut buf) {
-                    //Получаем строку из массива байт в кодировке UTF8
-                    Ok(count) => Some(String::from_utf8(buf[..count].into())
-                        .expect("can't parse to String")),
-                    Err(e) => {
-                        //Сюда мы попадаем если соединение оборвалось по таймауту
-                        println!("Error {}", e);
-                        None
-                    }
-                }
-            }
-            _ => None,
-        }
+        socket.as_ref()
+            //Блокирующий вызов. Здесь поток выполнения останавливаеться до тех пор пока
+            // не будут считанные данные или произойдет таймаут.
+            .map(|s| s.recv(&mut buf))
+            .map(|r|
+                r.map_err(|e| println!("Error can't send {}", e))
+                    .ok()
+            )
+            .unwrap_or(None)
+            //Получаем строку из массива байт в кодировке UTF8
+            .map(|count| String::from_utf8(buf[..count].into()))
+            .map(|r|
+                r.map_err(|e| println!("Error can't send {}", e))
+                    .ok()
+            )
+            .unwrap_or(None)
     }
 
     //Отправляем строку в сокет
     fn send_to_socket(message: String, socket: &Option<UdpSocket>) {
-        match socket {
-            //Преобразуем строку в байты в кодировке UTF8
-            // и отправляем данные в сокет
-            //Запись данных в сокент не блокирующая т.е. поток выполнения продолжит свою работу.
-            // Если отправить данные не удалось то прерываем работу программы с сообщением "can't send"
-            Some(s) => { s.send(message.as_bytes()).expect("can't send"); }
-            _ => return,
-        }
+        //Преобразуем строку в байты в кодировке UTF8
+        // и отправляем данные в сокет
+        //Запись данных в сокент не блокирующая т.е. поток выполнения продолжит свою работу.
+        let _ = socket.as_ref()
+            .map(|s| s.send(message.as_bytes()))
+            .map(|r| r.map_err(|e| println!("Error can't send {}", e)));
     }
 
     fn create_socket(port: &str, server_address: &str) -> UdpSocket {
@@ -337,11 +334,13 @@ impl SocketService {
     //Создает копию нашего сокета для того чтобы не держать заблокированным
     //Мьютекс с нашей моделью данных
     fn clone_socket(socket: &Option<UdpSocket>) -> Option<UdpSocket> {
-        //Создаем копию сокета. Мьютекс освободиться автоматически при выходе из метода.
-        match socket {
-            Some(s) => Some(s.try_clone().unwrap()),
-            _ => None
-        }
+        socket.as_ref()
+            .map(|s| s.try_clone())
+            .map(|r|
+                r.map_err(|e| println!("Error {}", e))
+                    .ok()
+            )
+            .unwrap_or(None)
     }
 }
 
