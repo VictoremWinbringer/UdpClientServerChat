@@ -284,18 +284,16 @@ impl SocketService {
             //Блокирующий вызов. Здесь поток выполнения останавливаеться до тех пор пока
             // не будут считанные данные или произойдет таймаут.
             .map(|s| s.recv(&mut buf))
-            .map(|r|
+            .and_then(|r|
                 r.map_err(|e| println!("Error can't send {}", e))
                     .ok()
             )
-            .unwrap_or(None)
             //Получаем строку из массива байт в кодировке UTF8
             .map(|count| String::from_utf8(buf[..count].into()))
-            .map(|r|
+            .and_then(|r|
                 r.map_err(|e| println!("Error can't send {}", e))
                     .ok()
             )
-            .unwrap_or(None)
     }
 
     //Отправляем строку в сокет
@@ -336,11 +334,10 @@ impl SocketService {
     fn clone_socket(socket: &Option<UdpSocket>) -> Option<UdpSocket> {
         socket.as_ref()
             .map(|s| s.try_clone())
-            .map(|r|
+            .and_then(|r|
                 r.map_err(|e| println!("Error {}", e))
                     .ok()
             )
-            .unwrap_or(None)
     }
 }
 
